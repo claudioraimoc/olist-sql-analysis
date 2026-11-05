@@ -216,3 +216,86 @@ SELECT
 	COUNT(*) - COUNT(order_delivered_customer_date) AS null_order_delivered_customer_date
 FROM orders 
 GROUP BY order_status;
+
+
+-- TABELLA: order_items
+
+-- 1. ricerca PK
+----> order_id presenta gruppi con piu di un record, ricerca chiave composta. aggiungo order_item_id (che
+---- numera ogni articolo di ogni ordine)
+---- La combinazione order_id, order_item_id presenta tutti valori unici e nessun NULL in entrambI i campi,
+---- la PK è quindi composta da order_id, order_item_id. 
+---- Inoltre order_id da solo si ripete (98.666 valori distinti su 112.650 righe), 
+---- quindi la descrizione “unique identifier” di Kaggle non vale per questa tabella.
+
+SELECT *
+FROM order_items 
+LIMIT 5;
+
+-- controllo unicità 
+SELECT order_id, order_item_id 
+FROM order_items
+GROUP BY order_id, order_item_id
+HAVING COUNT(*)>1;
+
+-- controllo NULL
+SELECT order_id, order_item_id
+FROM order_items
+WHERE order_id IS NULL OR order_item_id IS NULL;
+
+-- 2. controllo: order_id chiave esterna verso orders, i valori dell FK in order_items dovrei ritrovarli 
+-- tutti nella PK (order_id) di orders 
+----> 112650 record oi.order_id li ritroviamo in o.order_id, dove 112650 è il numero totale di record 
+---- oi.order_id, nessuna riga è orfana quindi oi.order_id è una FK che punta a o.order_id 
+
+SELECT COUNT(*)
+FROM order_items; 
+
+SELECT COUNT(*)
+FROM order_items oi 
+WHERE oi.order_id IN (SELECT o.order_id 
+					FROM orders o); 
+
+
+-- 3. cardinalita 
+----> dal controllo al punto 1 sul GROUP BY su order_id risultava che ci fossero piu gruppi con piu record 
+---- per gruppo per cui lo stesso ordine è presente su piu record; per cui sicuramente la cardinalita 
+---- è 1:N. 
+-- si verifica se tutti i valori di o.order_id sono presenti in oi.order_id (il NOT IN è sicuro in 
+-- questo caso perchè non sono presenti NULL nel relativo campo)
+----> ci sono 775 record da o.order_id non presenti in oi.order_id questo vuol dire che la cardinalità è 
+---- 1:0...N. 
+----> dei 775 ordini dalla seconda query si può vedere come per invoiced shipped rispettivamente ci siano
+---- 2 e 1 ordine senza items in oi., questo vuol dire che c'è un'anomalia per questi record; per gli altri
+---- è plausibile come l'ordine sia arrivato a non contenere articoli. 
+
+-- conteggio dei record di o.order_id non presenti in oi.order_id
+SELECT COUNT(*)
+FROM orders o
+WHERE o.order_id NOT IN (SELECT oi.order_id 
+						FROM order_items oi); 
+
+-- ripartizione per order_status dei 775 ordini non presenti in order_items
+SELECT order_status, COUNT(*)
+FROM orders o
+WHERE o.order_id NOT IN (SELECT oi.order_id 
+						FROM order_items oi)
+GROUP BY o.order_status; 
+
+
+-- TABELLA: order_reviews
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
