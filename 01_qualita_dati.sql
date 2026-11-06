@@ -361,11 +361,88 @@ WHERE review_id = '44e9f871226d8a130de3fc39dfbdf0c5';
 
 
 --TABELLA: order_payments
+----> per via della presenza di payment_sequential, che enumera la progressione dei pagamenti, allora possiamo
+---- affermare che order_id non è univoco e quindi non può essere PK; verifichiamo che i due campi
+---- restituiscono però una chiave composta una volta constatato che in nessuno dei due ci sono NULL.
 
+-- 1. ricerca PK
 
+SELECT *
+FROM order_payments 
+LIMIT 5;
 
+-- controllo unicità 
+SELECT order_id, payment_sequential 
+FROM order_payments
+GROUP BY order_id, payment_sequential 
+HAVING COUNT(*)>1;
 
+-- controllo NULL
+SELECT COUNT(*)
+FROM order_payments
+WHERE order_id IS NULL OR payment_sequential IS NULL;
 
+-- 2. controllo FK:
+----> 103.886 righe su 103.886 trovano il loro order_id in orders quindi op.order_id è FK.
 
+SELECT COUNT(*)
+FROM order_payments; 
 
+SELECT COUNT(*)
+FROM order_payments op
+WHERE op.order_id IN (SELECT o.order_id 
+					FROM orders o); 
 
+-- 3. cardinalita:
+----> quasi tutti gli order_id in orders sono presenti in op.order_id, tutti tranne 1 che ho controllato
+---- in order_items: ci sono dei pagamenti che però non risultano regisrati solo per quell'ordine. 
+---- in sostanza, a meno di quell'ordine che è chiaramente un'anomalia, la cardinalita è 1:N. 
+
+-- conteggio dei record di o.order_id non presenti in op.order_id
+SELECT *
+FROM orders o
+WHERE o.order_id NOT IN (SELECT op.order_id 
+						FROM order_payments op); 
+-- controllo dell'id in order items per controllo sui pagamenti, ci sono dei pagamenti effettivamente. 
+SELECT *
+FROM order_items 
+WHERE order_id = 'bfbd0f9bdef84302105ad712db648a6c';
+
+-- 4. controllo su valory payment
+----> Su 103.886 pagamenti, 9 hanno importo 0 (6 voucher con payment_sequential maggiore di 1, che sono 
+---- pagamenti successivi dentro ordini con più voucher, e 3 not_defined come unico pagamento dell’ordine)
+---- e 2 hanno 0 rate (credit_card, secondi pagamenti). Sono valori anomali ma pochissimi; 
+---- da tenere presenti nella riconciliazione e nella definizione di ricavo.
+SELECT *
+FROM order_payments
+WHERE payment_installments=0; 
+
+-- TABELLA: products
+
+-- 1. ricerca PK
+
+SELECT *
+FROM  
+LIMIT 5;
+
+-- controllo unicità 
+SELECT order_id, payment_sequential 
+FROM 
+GROUP BY order_id, payment_sequential 
+HAVING COUNT(*)>1;
+
+-- controllo NULL
+SELECT COUNT(*)
+FROM 
+WHERE order_id IS NULL OR payment_sequential IS NULL;
+
+-- 2. controllo FK:
+----> 103.886 righe su 103.886 trovano il loro order_id in orders quindi op.order_id è FK.
+
+SELECT COUNT(*)
+FROM ; 
+
+SELECT COUNT(*)
+FROM  
+WHERE .order_id IN (SELECT o.order_id 
+					FROM orders o); 
