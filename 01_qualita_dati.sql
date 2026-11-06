@@ -285,12 +285,82 @@ GROUP BY o.order_status;
 
 -- TABELLA: order_reviews
 
+-- 1. ricerca PK
+----> sia review_id che order_id hanno un numero di record minore del numero di record della tabella quindi
+---- nessuna delle due chiavi può essere PK. procedo nel controllo della chiave composta:
+---- la coppia order_id, review_id non presenta ripetizioni ne NULL, la consideriamo come chiave composta.
+---- il fatto che ci siano piu order_id per la stessa review risulta anomalo, non il contrario. 
+SELECT *
+FROM order_reviews 
+LIMIT 5;
+
+-- controllo unicità 
+SELECT order_id, review_id
+FROM order_reviews
+GROUP BY order_id, review_id
+HAVING COUNT(*)>1;
+
+-- controllo NULL
+SELECT order_id, review_id
+FROM order_reviews
+WHERE order_id IS NULL OR review_id IS NULL;
+
+-- 2. controllo: controllare se orw.order_id è FK per orders
+---->  99.224 righe su 99224 sono presenti in orders, tutti i record orw.order_id li ritroviamo 
+---- in o.order_id; quindi orw.order_id è FK.
+
+SELECT COUNT(*)
+FROM order_reviews; 
+
+SELECT COUNT(*)
+FROM order_reviews orw
+WHERE orw.order_id IN (SELECT o.order_id 
+					FROM orders o); 
+
+-- 3. cardinalita: in order_reviews alcuni order_id si ripetono, 98.673 distinti su 99.224 record, 
+-- mentre in orders sono unici, quindi la cardinalita è 1:N. controllo sui record di differenza: 
+----> 99.441 − 98.673 = 768 sono gli ordini "in eccesso" in orders che non hanno nessuna recensione, 
+---- essendoci ordini con nessuna recensione allora la cardinalita è 1:0...N che è sensato dato che
+---- la recensione non è obbligatoria. 
+---- 646 sono delivered tra gli ordini senza recensione ma in percentuale pesano poco rispetto al 
+---- complessivo degli ordini consegnati quindi quasi tutti quelli presenti in questa categoria 
+---- hanno una recensione.
+ 
+
+-- conteggio dei record di o.order_id non presenti in orw.order_id
+SELECT COUNT(*)
+FROM orders o
+WHERE o.order_id NOT IN (SELECT orw.order_id 
+						FROM order_reviews orw); 
+
+-- ripartizione per order_status dei 768 ordini senza recensione in order_reviews
+SELECT order_status, COUNT(*)
+FROM orders o
+WHERE o.order_id NOT IN (SELECT orw.order_id 
+						FROM order_reviews orw)
+GROUP BY o.order_status; 
 
 
+-- 4. coerenza tra le colonne: (1) ci sono review_id su più ordini quando in teoria un review_id 
+-- dovrebbe comparire  su un solo ordine. inoltre ci sono anche order_id con più recensioni che però risulta  
+-- essere piu plausibile visto che una recensione si puo anche aggiornare su un ordine.
+----> delle review che hanno molteplicita (m) maggiore di 1 la maggior parte hanno m=2 e un piccolo cluster
+---- m=3. dai controlli a campione in entrambi i casi risulta che l'unica cosa che differisce è order_id,
+---- il che può indurre a pensare che ci sia una causa non verificata, bisogna 
+---- verificare successivamente se ordini dello stesso gruppo siano associati allo stesso customer_unique_id. 
+
+SELECT review_id, COUNT(*) AS molteplicita
+FROM order_reviews
+GROUP BY review_id
+HAVING COUNT(*)>2; 
+
+-- per guardare i vari gruppi incollo nel where le review_id derivanti dalla query sopra
+SELECT *
+FROM order_reviews
+WHERE review_id = '44e9f871226d8a130de3fc39dfbdf0c5'; 
 
 
-
-
+--TABELLA: order_payments
 
 
 
