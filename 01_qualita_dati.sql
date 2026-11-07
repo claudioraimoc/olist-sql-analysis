@@ -487,3 +487,96 @@ WHERE product_weight_g = 0;
 
 
 -- TABELLA: sellers
+
+-- 1. ricerca PK
+----> seller_id ha tutti valori univoci e non ci sono NULL, è PK
+
+SELECT *
+FROM sellers 
+LIMIT 5;
+
+-- controllo unicità 
+SELECT seller_id  
+FROM sellers
+GROUP BY seller_id 
+HAVING COUNT(*)>1;
+
+-- controllo NULL
+SELECT COUNT(*)
+FROM sellers
+WHERE seller_id IS NULL;
+
+
+-- 2. controllo FK
+----> Tutti i record di oi.seller_id sono presenti in s.seller_id (112.650 su 112.650): nessuna riga 
+---- orfana, quindi order_items.seller_id è FK verso sellers.seller_id. Il risultato implica anche 
+---- l’assenza di NULL in oi.seller_id
+
+SELECT COUNT(*)
+FROM  order_items oi
+WHERE oi.seller_id IN (SELECT s.seller_id 
+					   FROM sellers s); 
+
+
+-- 3. cardinalita
+----> 112.650 righe di order_items contro 3.095 seller_id distinti: lo stesso venditore compare 
+---- su più righe (lato N). I distinti coincidono con le righe di sellers (3.095) e non ci sono orfane, 
+---- quindi ogni venditore compare almeno una volta in order_items: cardinalità 1:1..N
+
+SELECT COUNT(DISTINCT seller_id)
+FROM order_items;
+
+
+-- TABELLA: geolocation 
+
+-- 1. ricerca PK
+----> geolocation ha 19.015 CAP distinti su 1.000.163 righe (circa 53 righe per CAP), di cui 261.831 
+---- duplicati esatti. Un JOIN tramite CAP moltiplica le righe di customers e sellers: prima di 
+---- usarla serve una riga per CAP; nessuna PK. 
+
+SELECT *
+FROM geolocation 
+LIMIT 5;
+
+-- controllo unicità 
+SELECT COUNT(*)
+FROM
+	(SELECT DISTINCT *
+	FROM geolocation);
+
+-- cap distinti 
+SELECT COUNT(DISTINCT geolocation_zip_code_prefix)
+FROM geolocation; 
+
+
+-- TABELLA product_category_name_translation
+----> 73 categorie distinte in products contro 71 nella traduzione: 2 senza traduzione 
+---- ovvero pc_gamer, 3 prodotti; portateis_cozinha_e_preparadores_de_alimentos, 10 prodotti, più
+---- 610 prodotti senza categoria visti in precedenza
+
+
+-- categorie di prodotti in eccesso, rispetto a product_category_name_translation, ovvero le 
+-- categorie senza traduzione
+SELECT DISTINCT product_category_name
+FROM products p
+WHERE NOT EXISTS(
+				SELECT *
+				FROM product_category_name_translation pt
+				WHERE p.product_category_name = pt.product_category_name  
+				);
+
+-- numero di prodotti per le categorie di prodotti senza traduzione
+SELECT product_category_name, COUNT(*)
+FROM products 
+WHERE product_category_name IN ('portateis_cozinha_e_preparadores_de_alimentos', 'pc_gamer')
+GROUP BY product_category_name;
+
+
+
+
+
+
+
+
+
+
