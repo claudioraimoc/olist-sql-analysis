@@ -403,7 +403,7 @@ SELECT *
 FROM orders o
 WHERE o.order_id NOT IN (SELECT op.order_id 
 						FROM order_payments op); 
--- controllo dell'id in order items per controllo sui pagamenti, ci sono dei pagamenti effettivamente. 
+-- articoli dell'ordine senza pagamenti, controllati in order_items
 SELECT *
 FROM order_items 
 WHERE order_id = 'bfbd0f9bdef84302105ad712db648a6c';
