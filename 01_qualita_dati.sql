@@ -420,29 +420,70 @@ WHERE payment_installments=0;
 -- TABELLA: products
 
 -- 1. ricerca PK
+----> product_id è PK per products che presenta un totale di 32951 record
 
 SELECT *
-FROM  
+FROM products
 LIMIT 5;
 
 -- controllo unicità 
-SELECT order_id, payment_sequential 
-FROM 
-GROUP BY order_id, payment_sequential 
+SELECT product_id  
+FROM products
+GROUP BY product_id 
 HAVING COUNT(*)>1;
 
 -- controllo NULL
 SELECT COUNT(*)
-FROM 
-WHERE order_id IS NULL OR payment_sequential IS NULL;
+FROM products
+WHERE product_id IS NULL;
 
--- 2. controllo FK:
-----> 103.886 righe su 103.886 trovano il loro order_id in orders quindi op.order_id è FK.
-
-SELECT COUNT(*)
-FROM ; 
+-- 2. controllo FK: controllo se ogni product_id di order_items è presente in product.product_id
+----> tutti i record di oi.product_id sono presenti in p.product_id (112.650 su 112.650), 
+---- inoltre in oi.product_id non ci sono NULL quindi possiamo considerare product_id FK
 
 SELECT COUNT(*)
-FROM  
-WHERE .order_id IN (SELECT o.order_id 
-					FROM orders o); 
+FROM  order_items oi
+WHERE oi.product_id IN (SELECT p.product_id 
+					   FROM products p); 
+
+SELECT COUNT(*)
+FROM order_items 
+WHERE product_id IS NOT NULL;
+
+-- 3. cardinalita: la cardinalità è sicuramente 1:N visto che lo stesso product_id compare piu volte
+-- in order_items, verifico se tutti i p.product_id sono presenti in oi.product_id in modo da 
+-- eventualmente confermare la cardinalita 1:1...N
+----> laquery restituisce 32.951 product_id distinti in order_items contro 32.951 righe in products; 
+---- non essendoci orfane, ogni prodotto compare almeno una volta, quindi 1:1..N
+
+SELECT COUNT(DISTINCT product_id)
+FROM order_items;
+
+-- 4. controlli sulle rimanenti colonne
+----> i 610 NULL presenti in product_category_name, product_description_lenght, product_photos_qty
+---- sono sugli stessi record, allo stesso modo i 2 NULL per i 4 campi sono gli stessi record. 
+---- sono presenti 4 prodotti con peso pari a 0, tutti della stessa categoria; da trattare come dato 
+---- mancante
+
+SELECT COUNT(*)
+FROM products 
+WHERE 
+	product_category_name IS NULL 
+	AND product_description_lenght IS NULL 
+	AND product_photos_qty IS NULL;  
+
+SELECT COUNT(*)
+FROM products 
+WHERE 
+	product_length_cm IS NULL 
+	AND product_weight_g IS NULL 
+	AND product_height_cm IS NULL
+	AND product_width_cm IS NULL; 
+
+-- controllo sui prodotti per cui il peso minimo è 0
+SELECT *
+FROM products 
+WHERE product_weight_g = 0;
+
+
+-- TABELLA: sellers
