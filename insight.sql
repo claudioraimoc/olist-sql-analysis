@@ -120,7 +120,7 @@ FROM order_id_join
 GROUP BY payment_installments_max
 ORDER BY payment_installments_max; 
 
-----> CONCLUSIONE:
+----> 1. CONCLUSIONE:
 ---- Su 99.441 ordini, 98.092 (98,64%) hanno pagato esattamente il dovuto (prezzo + spedizione); di questi, 3 sono
 ---- falsi saldati (senza articoli e senza pagamenti reali, 0 − 0).
 ---- 210 ordini (0,21%) hanno pagato meno del dovuto: comprendono l'ordine senza pagamenti registrati e,
@@ -131,6 +131,64 @@ ORDER BY payment_installments_max;
 ---- coerente con un costo aggiuntivo sulle rate, non dimostrato perché il dataset non ha dati sugli interessi.
 ---- Un'eccezione ad esempio sono i piani a  10 rate, per un totale di 61 ordini, che hanno una media più bassa (7,8%); 
 ---- le classi con 13 o più rate hanno 1-2 ordini.
+
+
+-- 2. Tempo di consegna medio per stato geografico: 
+-- esclusi tutti gli ordini che non sono delivered, compresi anche i 6 canceled che hanno una
+-- data di consegna. dei 1383 ordini che abbiamo visto avere date anomale a due a due, 
+-- consideriamo da escludere solo le coppie per cui order_purchase_timestamp>order_delivered_customer_date
+-- visto che come intervallo di tempo consideriamo ciò che intercorre tra l'ordine effettuato e la consegna al cliente. 
+
+-- numero di 'delivered' totali, da questi ne sono stati tolti esattamente 8 dalla CTE successiva, 
+-- cioè quelli che abbiamo visto non avere data di consegna. 
+SELECT COUNT(*)
+FROM orders 
+WHERE order_status='delivered';
+
+WITH orders_delivered AS (
+	SELECT customer_id, order_purchase_timestamp, order_delivered_customer_date
+	FROM orders 
+	WHERE 
+		order_purchase_timestamp < order_delivered_customer_date AND 
+		order_status = 'delivered'
+),
+orders_delivered_state AS (
+	SELECT od.customer_id, od.order_purchase_timestamp, od.order_delivered_customer_date, c.customer_state 
+	FROM orders_delivered od
+	JOIN customers c ON c.customer_id = od.customer_id
+)
+SELECT 
+	customer_state, 
+	AVG(order_delivered_customer_date-order_purchase_timestamp) AS avg_delivery_time,
+	ROUND(AVG(EXTRACT(epoch FROM order_delivered_customer_date-order_purchase_timestamp)) / (60*60*24), 2) AS avg_day, 
+	COUNT(*)
+FROM orders_delivered_state
+GROUP BY customer_state
+ORDER BY avg_day; 
+
+----> 2. CONCLUSIONE: nessun delivered ha la data di acquisto successiva alla consegna. 
+---- il tempo medio di consegna nello stato del cliente va da 8,8 giorni per SP a 29,4 per RR, 
+---- 9 stati superano le tre settimane: i più lenti nell'arrivo degli ordini sono RR, AP, AM. 
+---- calcolo effettuato su 96.470 ordini delivered. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
