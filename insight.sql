@@ -174,9 +174,41 @@ ORDER BY avg_day;
 
 
 
+-- 3. Clienti che effettuano almeno un secondo acquisto
 
+-- immagino sempre un join tra orders e customers per far corrispondere a customers i vari ordini
+-- e vedere quanti di questi ne hanno piu di uno facendo un group by
 
+WITH orders_with_customers AS (
+	SELECT 
+		c.customer_unique_id, o.order_id, o.order_status, o.order_purchase_timestamp,
+		ROW_NUMBER() OVER (PARTITION BY c.customer_unique_id ORDER BY o.order_purchase_timestamp ASC) AS rn_customers
+	FROM orders o
+	JOIN customers c ON c.customer_id = o.customer_id
+),
+customers_rn2 AS (
+	SELECT *
+	FROM orders_with_customers
+	WHERE rn_customers >= 2
+),
+customer_unique_id_grouped AS (
+	SELECT customer_unique_id, COUNT(rn_customers)+1 AS fasce_acquisti
+	FROM customers_rn2
+	GROUP BY customer_unique_id
+)
+SELECT 
+	fasce_acquisti, 
+	COUNT(customer_unique_id) AS n_clienti,
+	ROUND(COUNT(customer_unique_id) *100.0 / 2997, 2) AS pct_clienti
+FROM customer_unique_id_grouped
+GROUP BY fasce_acquisti
+ORDER BY fasce_acquisti; 
 
+----> 3. CONCLUSIONE: il cliente è customer_unique_id e per "acquisto" conto ogni ordine, in tutti gli stati.
+---- 2.997 clienti su 96.096 (circa il 3,1%) hanno fatto almeno un secondo ordine. Tra questi,
+---- il 91,6% ne ha fatti 2, il 6,8% ne ha fatti 3, il massimo è 17 (un cliente, non controllato).
+---- Quasi tutta la clientela compra una sola volta.
+---- Limite: gli stati non sono filtrati, quindi il 3,1% può includere secondi ordini cancellati.
 
 
 
