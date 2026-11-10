@@ -211,16 +211,64 @@ ORDER BY fasce_acquisti;
 ---- Limite: gli stati non sono filtrati, quindi il 3,1% può includere secondi ordini cancellati.
 
 
+-- 4. Top 3 prodotti per ricavi in ogni categoria: 
+-- da order_items consideriamo i vari "product_id" e e i loro ricavi dati da "price"
+-- da orders ci teniamo solo i prodotti con "order_status" delivered, che hanno portato quindi effettivamente ad un ricavo
+-- da products invece consideriamo "product_category_name" 
+-- e da product_category_name_translation la corrispettiva traduzione
 
+-- LEFT JOIN tra products e traduzioni per non perdere nessun product_id
+WITH products_with_category_english AS (
+	SELECT p.product_id, p.product_category_name, pt.product_category_name_english 
+	FROM products p
+	LEFT JOIN product_category_name_translation pt ON p.product_category_name = pt.product_category_name  
+),
+-- JOIN tra order_items e orders per filtrare su order status delivered e mantenerne solo i relativi product_id
+product_id_delivered AS (
+	SELECT oi.product_id, oi.price  
+	FROM order_items oi
+	JOIN orders o ON o.order_id = oi.order_id AND o.order_status = 'delivered'
+),
+-- JOIN tra le prime due CTE
+products_price_cat_name AS (
+	SELECT pwce.product_id, pid.price ,pwce.product_category_name, pwce.product_category_name_english 
+	FROM products_with_category_english pwce
+	JOIN product_id_delivered pid ON pid.product_id = pwce.product_id
+),
+-- una riga per ogni prodotto, con il COALESCE imposto una sola colonna per il nome che prende in sequenza
+-- quello in inglese, in alternativa se non c'è quello in portoghese infine ricade in 'senza_categoria'
+products_grouped AS (
+	SELECT 
+		product_id,
+		COALESCE(product_category_name_english, product_category_name, 'senza_categoria') AS cat_name,
+		SUM(price) AS tot_price
+	FROM products_price_cat_name
+	GROUP BY product_id, product_category_name, product_category_name_english
+),
+-- aggiunta del rank  
+products_grouped_dr AS (
+	SELECT
+		product_id,
+		cat_name,
+		tot_price,
+		dense_rank() OVER(PARTITION BY cat_name ORDER BY tot_price DESC) AS dense_rank_products
+	FROM products_grouped
+)
+SELECT *
+FROM products_grouped_dr
+WHERE dense_rank_products <= 3
 
-
-
-
-
-
-
-
-
+/*
+----> CONCLUSIONE 4. Ricavo = somma di price (senza spedizione) sugli articoli di ordini delivered. Classifica per prodotto
+dentro ogni categoria: 74 categorie (comprese le 610 referenze senza categoria, tenute insieme come "senza_categoria"), 220 righe.
+Con DENSE_RANK 2 categorie hanno 4 prodotti per un pareggio, 3 ne hanno meno di 3.
+Il primo prodotto di ogni categoria va da 180 reais (fashion_childrens_clothes) a 63.560 (health_beauty);
+metà delle categorie ha un primo prodotto sotto i 5.000 e 28 sopra i 10.000. In testa ci sono health_beauty,
+computers, computers_accessories, bed_bath_table e baby.
+"senza_categoria" arriva all'undicesimo posto per ricavo del primo prodotto (23.368).
+Limite: il ricavo non dice quante unità sono state vendute, quindi non distingue un prodotto molto venduto da uno molto caro;
+non ho verificato la quadratura dei ricavi con il totale degli articoli consegnati.
+*/
 
 
 
