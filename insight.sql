@@ -211,12 +211,10 @@ ORDER BY fasce_acquisti;
 ---- Limite: gli stati non sono filtrati, quindi il 3,1% può includere secondi ordini cancellati.
 
 
--- 4. Top 3 prodotti per ricavi in ogni categoria: 
--- da order_items consideriamo i vari "product_id" e e i loro ricavi dati da "price"
--- da orders ci teniamo solo i prodotti con "order_status" delivered, che hanno portato quindi effettivamente ad un ricavo
--- da products invece consideriamo "product_category_name" 
--- e da product_category_name_translation la corrispettiva traduzione
-
+-- CREAZIONE VIEW --
+-- servirà per l'analisi dei successivi tre insight che prevedono l'unione delle stesse 4 tabelle, 
+-- considerandone tutte le colonne del caso
+CREATE VIEW delivered_items_view AS
 -- LEFT JOIN tra products e traduzioni per non perdere nessun product_id
 WITH products_with_category_english AS (
 	SELECT p.product_id, p.product_category_name, pt.product_category_name_english 
@@ -225,38 +223,98 @@ WITH products_with_category_english AS (
 ),
 -- JOIN tra order_items e orders per filtrare su order status delivered e mantenerne solo i relativi product_id
 product_id_delivered AS (
-	SELECT oi.product_id, oi.price  
+	SELECT o.order_id, oi.product_id, oi.seller_id, oi.price, o.order_purchase_timestamp   
 	FROM order_items oi
 	JOIN orders o ON o.order_id = oi.order_id AND o.order_status = 'delivered'
 ),
 -- JOIN tra le prime due CTE
 products_price_cat_name AS (
-	SELECT pwce.product_id, pid.price ,pwce.product_category_name, pwce.product_category_name_english 
+	SELECT 
+		order_id,
+		pwce.product_id, 
+		pid.seller_id, 
+		pid.price,
+		COALESCE(product_category_name_english, product_category_name, 'senza_categoria') AS cat_name,
+		pid.order_purchase_timestamp
 	FROM products_with_category_english pwce
 	JOIN product_id_delivered pid ON pid.product_id = pwce.product_id
-),
--- una riga per ogni prodotto, con il COALESCE imposto una sola colonna per il nome che prende in sequenza
--- quello in inglese, in alternativa se non c'è quello in portoghese infine ricade in 'senza_categoria'
-products_grouped AS (
-	SELECT 
-		product_id,
-		COALESCE(product_category_name_english, product_category_name, 'senza_categoria') AS cat_name,
-		SUM(price) AS tot_price
-	FROM products_price_cat_name
-	GROUP BY product_id, product_category_name, product_category_name_english
-),
--- aggiunta del rank  
-products_grouped_dr AS (
+)
+SELECT *
+FROM products_price_cat_name;
+
+
+-- 4. Top 3 prodotti per ricavi in ogni categoria: 
+-- da order_items consideriamo i vari "product_id" e e i loro ricavi dati da "price"
+-- da orders ci teniamo solo i prodotti con "order_status" delivered, che hanno portato quindi effettivamente ad un ricavo
+-- da products invece consideriamo "product_category_name" 
+-- e da product_category_name_translation la corrispettiva traduzione
+
+-- items raggruppati
+WITH delivered_items_grouped AS (
 	SELECT
+		product_id,
+		cat_name,
+		SUM(price) AS tot_price
+	FROM delivered_items_view
+	GROUP BY product_id, cat_name
+),
+-- aggiunta del rank
+dr_delivered_items AS (
+	SELECT 
 		product_id,
 		cat_name,
 		tot_price,
 		dense_rank() OVER(PARTITION BY cat_name ORDER BY tot_price DESC) AS dense_rank_products
-	FROM products_grouped
+	FROM delivered_items_grouped
 )
 SELECT *
-FROM products_grouped_dr
+FROM dr_delivered_items
 WHERE dense_rank_products <= 3
+ORDER BY cat_name, dense_rank_products;
+
+-- categorie con più di 3 righe cioè pareggi di ricavo con DENSE_RANK:
+-- sono due categorie cioè fashion_childrens_clothes (4) e furniture_mattress_and_upholstery (4)
+WITH delivered_items_grouped AS (
+	SELECT product_id, cat_name, SUM(price) AS tot_price
+	FROM delivered_items_view
+	GROUP BY product_id, cat_name
+),
+dr_delivered_items AS (
+	SELECT product_id, cat_name, tot_price,
+		dense_rank() OVER(PARTITION BY cat_name ORDER BY tot_price DESC) AS dense_rank_products
+	FROM delivered_items_grouped
+),
+selct_finale AS (
+	SELECT *
+	FROM dr_delivered_items
+	WHERE dense_rank_products <= 3
+)
+SELECT cat_name, COUNT(*)
+FROM selct_finale
+GROUP BY cat_name
+HAVING COUNT(*) > 3;
+
+-- categorie con meno di 3 righe cioè con meno di 3 prodotti venduti: 
+-- cds_dvds_musicals (un prodotto), pc_gamer e security_and_services entrambe con due prodotti
+WITH delivered_items_grouped AS (
+	SELECT product_id, cat_name, SUM(price) AS tot_price
+	FROM delivered_items_view
+	GROUP BY product_id, cat_name
+),
+dr_delivered_items AS (
+	SELECT product_id, cat_name, tot_price,
+		dense_rank() OVER(PARTITION BY cat_name ORDER BY tot_price DESC) AS dense_rank_products
+	FROM delivered_items_grouped
+),
+selct_finale AS (
+	SELECT *
+	FROM dr_delivered_items
+	WHERE dense_rank_products <= 3
+)
+SELECT cat_name, COUNT(*)
+FROM selct_finale
+GROUP BY cat_name
+HAVING COUNT(*) < 3;
 
 /*
 ----> CONCLUSIONE 4. Ricavo = somma di price (senza spedizione) sugli articoli di ordini delivered. Classifica per prodotto
@@ -269,6 +327,72 @@ computers, computers_accessories, bed_bath_table e baby.
 Limite: il ricavo non dice quante unità sono state vendute, quindi non distingue un prodotto molto venduto da uno molto caro;
 non ho verificato la quadratura dei ricavi con il totale degli articoli consegnati.
 */
+
+-- 5. Venditori con ricavi sopra la media della loro categoria: 
+-- legge dalla view "delivered_items_view": 
+
+-- raggruppo per venditori sommandone i ricavi 
+-- confronto per ricavi venditore > media venditore per categoria
+
+-- raggruppo per categoria e venditore calcolandone il ricavato 
+WITH seller_revenue_per_cat AS (
+	SELECT seller_id, cat_name, SUM(price) AS tot_seller_cat
+	FROM delivered_items_view
+	GROUP BY seller_id, cat_name 
+),
+avg_revenue_per_cat AS (
+	SELECT cat_name, AVG(tot_seller_cat) AS avg_cat
+	FROM seller_revenue_per_cat 
+	GROUP BY cat_name 
+),
+-- unione delle due tabelle per confronto successivo
+seller_revenue_avg_per_cat AS (
+	SELECT src.seller_id, src.cat_name, src.tot_seller_cat, arc.avg_cat 
+	FROM seller_revenue_per_cat src
+	JOIN avg_revenue_per_cat arc ON arc.cat_name = src.cat_name
+),
+-- colonna in aggiunta per identificare i venditori con ricavato al di sopra della media, in modo da poter utilizzare
+-- la select esterna dopo
+sellers_avg_over AS (
+	SELECT 
+		seller_id, cat_name, tot_seller_cat, avg_cat, 
+		CASE 
+			WHEN tot_seller_cat > avg_cat THEN 'OVER'
+			ELSE 'NON_OVER'
+		END AS seller_check
+	FROM seller_revenue_avg_per_cat
+) 
+SELECT COUNT(*)
+FROM sellers_avg_over
+WHERE cat_name = 'senza_categoria';
+
+/*
+----> 5. CONCLUSIONE: Confronto tra il ricavo di ogni venditore in una categoria (somma di price, ordini delivered) e la media dei ricavi dei venditori di quella categoria.
+Su 6.398 coppie venditore-categoria, 1.298 (circa il 20,3%) sono sopra la media: la maggior parte dei venditori sta sotto,
+perché pochi venditori grandi tirano su la media.
+"senza_categoria" è inclusa nel confronto (247 coppie, circa il 3,9% del totale) anche se raggruppa prodotti diversi.
+Limiti: con ">" le categorie con un solo venditore non compaiono (non le ho contate);
+non ho calcolato il peso dei venditori sopra la media sul ricavo totale.
+*/
+
+-- 6. Ordini e ricavi per mese, con variazione sul mese precedente
+
+
+
+
+-- 7. Ordini consegnati in ritardo e punteggio delle recensioni 
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
