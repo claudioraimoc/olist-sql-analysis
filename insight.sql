@@ -376,8 +376,52 @@ non ho calcolato il peso dei venditori sopra la media sul ricavo totale.
 */
 
 -- 6. Ordini e ricavi per mese, con variazione sul mese precedente
+-- tabella da view "delivered_items_view"
+
+SELECT *
+FROM delivered_items_view
+LIMIT 5;
 
 
+WITH date_management AS (
+	SELECT 
+		order_id, product_id, seller_id, price, cat_name,
+		date_trunc('month', order_purchase_timestamp) AS dt_order_purchase
+	FROM delivered_items_view
+),
+items_grouped_by_month AS (
+	SELECT 
+		dt_order_purchase, 
+		COUNT(DISTINCT order_id) AS n_orders_per_month, 
+		SUM(price) AS tot_revenue_per_month
+	FROM date_management
+	GROUP BY dt_order_purchase
+)
+-- il CASE WHEN lo utilizzo per far considerare null la variazione rispetto ad un eventuale mese assente nell'elenco
+SELECT 
+	dt_order_purchase, 
+	n_orders_per_month, 
+	tot_revenue_per_month,
+	CASE 
+		WHEN lag(dt_order_purchase, 1) OVER(ORDER BY dt_order_purchase) = dt_order_purchase - INTERVAL '1 month'
+			THEN tot_revenue_per_month - LAG(tot_revenue_per_month, 1) OVER(ORDER BY dt_order_purchase)
+	END AS rev_delta,
+		CASE 
+		WHEN lag(dt_order_purchase, 1) OVER(ORDER BY dt_order_purchase) = dt_order_purchase - INTERVAL '1 month'
+			THEN ROUND((tot_revenue_per_month - LAG(tot_revenue_per_month, 1) OVER(ORDER BY dt_order_purchase)) * 100.0 / NULLIF(LAG(tot_revenue_per_month, 1) OVER(ORDER BY dt_order_purchase), 0), 2)
+	END AS pct_delta
+FROM items_grouped_by_month
+ORDER BY dt_order_purchase; 
+
+
+/*
+----> 6. CONCLUSIONE: Ordini e ricavi per mese (solo ordini delivered, mese = acquisto), con variazione sul mese precedente.
+La serie va da settembre 2016 ad agosto 2018 (23 mesi): novembre 2016 manca, quindi la variazione di dicembre 2016 è lasciata vuota.
+I ricavi crescono da 111.798 reais a gennaio 2017 a 924.645 a gennaio 2018, e il picco è novembre 2017 (7.289 ordini, 987.765 reais, +52,4% su ottobre),
+seguito da dicembre 2017 (-26,5%). Nel 2018 i ricavi restano stabili tra 826.000 e 977.000 al mese.
+Limiti: le variazioni percentuali dei primi mesi (ottobre 2016 e gennaio 2017) sono calcolate su basi piccolissime e non vanno lette;
+non ho calcolato la variazione degli ordini, e la causa del picco di novembre 2017 non è verificata.
+*/
 
 
 -- 7. Ordini consegnati in ritardo e punteggio delle recensioni 
