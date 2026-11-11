@@ -1,6 +1,5 @@
 -- 1. quanto avrebbe dovuto pagare ogni cliente per ogni ordine in base agli 
 -- articoli e quanto ha pagato davvero
-----> 
 
 SELECT *
 FROM order_payments 
@@ -120,17 +119,20 @@ FROM order_id_join
 GROUP BY payment_installments_max
 ORDER BY payment_installments_max; 
 
+
+/*
 ----> 1. CONCLUSIONE:
----- Su 99.441 ordini, 98.092 (98,64%) hanno pagato esattamente il dovuto (prezzo + spedizione); di questi, 3 sono
----- falsi saldati (senza articoli e senza pagamenti reali, 0 − 0).
----- 210 ordini (0,21%) hanno pagato meno del dovuto: comprendono l'ordine senza pagamenti registrati e,
----- verosimilmente, pagamenti parziali (da distinguere). Non analizzati in questa domanda: da verificare.
----- 1.139 ordini (1,15%) hanno pagato più del dovuto: 772 sono ordini senza articoli, quindi dovuto non
----- calcolabile e non un vero eccesso; i restanti 367 hanno articoli e un pagato superiore al dovuto.
----- Nei 367 l'eccesso medio cresce con il numero di rate (circa 0,3% con 1 rata, 5% con 3, oltre 20% con 13 o più):
----- coerente con un costo aggiuntivo sulle rate, non dimostrato perché il dataset non ha dati sugli interessi.
----- Un'eccezione ad esempio sono i piani a  10 rate, per un totale di 61 ordini, che hanno una media più bassa (7,8%); 
----- le classi con 13 o più rate hanno 1-2 ordini.
+Su 99.441 ordini, 98.092 (98,64%) hanno pagato esattamente il dovuto (prezzo + spedizione); di questi, 3 sono
+falsi saldati (senza articoli e senza pagamenti reali, 0 − 0).
+210 ordini (0,21%) hanno pagato meno del dovuto: comprendono l'ordine senza pagamenti registrati e,
+verosimilmente, pagamenti parziali (da distinguere). Non analizzati in questa domanda: da verificare.
+1.139 ordini (1,15%) hanno pagato più del dovuto: 772 sono ordini senza articoli, quindi dovuto non
+calcolabile e non un vero eccesso; i restanti 367 hanno articoli e un pagato superiore al dovuto.
+Nei 367 l'eccesso medio cresce con il numero di rate (circa 0,3% con 1 rata, 5% con 3, oltre 20% con 13 o più):
+coerente con un costo aggiuntivo sulle rate, non dimostrato perché il dataset non ha dati sugli interessi.
+Un'eccezione ad esempio sono i piani a  10 rate, per un totale di 61 ordini, che hanno una media più bassa (7,8%); 
+le classi con 13 o più rate hanno 1-2 ordini.
+ */
 
 
 -- 2. Tempo di consegna medio per stato geografico: 
@@ -166,11 +168,12 @@ FROM orders_delivered_state
 GROUP BY customer_state
 ORDER BY avg_day; 
 
+/*
 ----> 2. CONCLUSIONE: nessun delivered ha la data di acquisto successiva alla consegna. 
----- il tempo medio di consegna nello stato del cliente va da 8,8 giorni per SP a 29,4 per RR, 
----- 9 stati superano le tre settimane: i più lenti nell'arrivo degli ordini sono RR, AP, AM. 
----- calcolo effettuato su 96.470 ordini delivered. 
-
+il tempo medio di consegna nello stato del cliente va da 8,8 giorni per SP a 29,4 per RR, 
+9 stati superano le tre settimane: i più lenti nell'arrivo degli ordini sono RR, AP, AM. 
+calcolo effettuato su 96.470 ordini delivered. 
+ */
 
 
 
@@ -204,12 +207,13 @@ FROM customer_unique_id_grouped
 GROUP BY fasce_acquisti
 ORDER BY fasce_acquisti; 
 
-----> 3. CONCLUSIONE: il cliente è customer_unique_id e per "acquisto" conto ogni ordine, in tutti gli stati.
----- 2.997 clienti su 96.096 (circa il 3,1%) hanno fatto almeno un secondo ordine. Tra questi,
----- il 91,6% ne ha fatti 2, il 6,8% ne ha fatti 3, il massimo è 17 (un cliente, non controllato).
----- Quasi tutta la clientela compra una sola volta.
----- Limite: gli stati non sono filtrati, quindi il 3,1% può includere secondi ordini cancellati.
-
+/*
+ ----> 3. CONCLUSIONE: il cliente è customer_unique_id e per "acquisto" conto ogni ordine, in tutti gli stati.
+2.997 clienti su 96.096 (circa il 3,1%) hanno fatto almeno un secondo ordine. Tra questi,
+il 91,6% ne ha fatti 2, il 6,8% ne ha fatti 3, il massimo è 17 (un cliente, non controllato).
+Quasi tutta la clientela compra una sola volta.
+Limite: gli stati non sono filtrati, quindi il 3,1% può includere secondi ordini cancellati.
+ */
 
 -- CREAZIONE VIEW --
 -- servirà per l'analisi dei successivi tre insight che prevedono l'unione delle stesse 4 tabelle, 
@@ -243,7 +247,7 @@ SELECT *
 FROM products_price_cat_name;
 
 
--- 4. Top 3 prodotti per ricavi in ogni categoria: 
+-- 4. Top 3 prodotti per ricavi in ogni categoria, presa la view precedentemente costruita: 
 -- da order_items consideriamo i vari "product_id" e e i loro ricavi dati da "price"
 -- da orders ci teniamo solo i prodotti con "order_status" delivered, che hanno portato quindi effettivamente ad un ricavo
 -- da products invece consideriamo "product_category_name" 
@@ -317,15 +321,13 @@ GROUP BY cat_name
 HAVING COUNT(*) < 3;
 
 /*
-----> CONCLUSIONE 4. Ricavo = somma di price (senza spedizione) sugli articoli di ordini delivered. Classifica per prodotto
+----> 4. CONCLUSIONE ricavo = somma di price (senza spedizione) sugli articoli di ordini delivered. Classifica per prodotto
 dentro ogni categoria: 74 categorie (comprese le 610 referenze senza categoria, tenute insieme come "senza_categoria"), 220 righe.
 Con DENSE_RANK 2 categorie hanno 4 prodotti per un pareggio, 3 ne hanno meno di 3.
 Il primo prodotto di ogni categoria va da 180 reais (fashion_childrens_clothes) a 63.560 (health_beauty);
 metà delle categorie ha un primo prodotto sotto i 5.000 e 28 sopra i 10.000. In testa ci sono health_beauty,
 computers, computers_accessories, bed_bath_table e baby.
-"senza_categoria" arriva all'undicesimo posto per ricavo del primo prodotto (23.368).
-Limite: il ricavo non dice quante unità sono state vendute, quindi non distingue un prodotto molto venduto da uno molto caro;
-non ho verificato la quadratura dei ricavi con il totale degli articoli consegnati.
+"senza_categoria" è all'undicesimo posto per ricavo del primo prodotto, cioè 23.368.
 */
 
 -- 5. Venditori con ricavi sopra la media della loro categoria: 
@@ -362,17 +364,17 @@ sellers_avg_over AS (
 		END AS seller_check
 	FROM seller_revenue_avg_per_cat
 ) 
-SELECT COUNT(*)
+SELECT seller_check, COUNT(*) AS n_coppie
 FROM sellers_avg_over
-WHERE cat_name = 'senza_categoria';
+GROUP BY seller_check;
 
 /*
-----> 5. CONCLUSIONE: Confronto tra il ricavo di ogni venditore in una categoria (somma di price, ordini delivered) e la media dei ricavi dei venditori di quella categoria.
-Su 6.398 coppie venditore-categoria, 1.298 (circa il 20,3%) sono sopra la media: la maggior parte dei venditori sta sotto,
-perché pochi venditori grandi tirano su la media.
-"senza_categoria" è inclusa nel confronto (247 coppie, circa il 3,9% del totale) anche se raggruppa prodotti diversi.
-Limiti: con ">" le categorie con un solo venditore non compaiono (non le ho contate);
-non ho calcolato il peso dei venditori sopra la media sul ricavo totale.
+----> 5. CONCLUSIONE: Confronto tra il ricavo di ogni venditore in una categoria (somma di price, ordini delivered) e 
+la media dei ricavi dei venditori di quella categoria.
+Su 6.398 coppie venditore-categoria 1.298, circa il 20,3%, sono sopra la media: la maggior parte dei venditori è al di sotto
+perché i pochi venditori grandi tirano su la media.
+"senza_categoria" è inclusa nel confronto con 247 coppie, ovvero il 3,9% del totale, anche se raggruppa prodotti diversi.
+le categorie con un solo venditore non compaiono.
 */
 
 -- 6. Ordini e ricavi per mese, con variazione sul mese precedente
@@ -415,20 +417,62 @@ ORDER BY dt_order_purchase;
 
 
 /*
-----> 6. CONCLUSIONE: Ordini e ricavi per mese (solo ordini delivered, mese = acquisto), con variazione sul mese precedente.
-La serie va da settembre 2016 ad agosto 2018 (23 mesi): novembre 2016 manca, quindi la variazione di dicembre 2016 è lasciata vuota.
-I ricavi crescono da 111.798 reais a gennaio 2017 a 924.645 a gennaio 2018, e il picco è novembre 2017 (7.289 ordini, 987.765 reais, +52,4% su ottobre),
-seguito da dicembre 2017 (-26,5%). Nel 2018 i ricavi restano stabili tra 826.000 e 977.000 al mese.
-Limiti: le variazioni percentuali dei primi mesi (ottobre 2016 e gennaio 2017) sono calcolate su basi piccolissime e non vanno lette;
-non ho calcolato la variazione degli ordini, e la causa del picco di novembre 2017 non è verificata.
+----> 6. CONCLUSIONE: Ordini e ricavi per mese (solo ordini delivered, con mese considerato quello di acquisto) e variazione sul mese precedente.
+la serie va da settembre 2016 ad agosto 2018 per un totale di 23 mesi ma manca novembre 2016 quindi la variazione di 
+dicembre 2016 per costruzione della query è lasciata vuota.
+I ricavi crescono da 111.798 reais a gennaio 2017 a 924.645 a gennaio 2018, e il picco è novembre 2017 con 7.289 ordini per un totale di 
+987.765 reais e un +52,4% su ottobre), seguito da dicembre 2017 (-26,5%). nel 2018 i ricavi restano stabili tra 826.000 e 977.000 al mese.
+le variazioni percentuali dei mesi di ottobre 2016 e gennaio 2017 sono calcolate su ricavi piccoli.
 */
 
 
 -- 7. Ordini consegnati in ritardo e punteggio delle recensioni 
+-- tra i vari ordini in orders considero quelli per cui order_delivered_customer_date > order_estimated_delivery_date
+-- di questi in ritardo considero i review_score in order_reviews
 
+-- innanzitutto filtro gli ordini per 'delivered' e inoltre non considero quelli che hanno NULL
+-- nelle due colonne timestamp considerate dato che a quel punto non si può sapere se gli ordini
+-- sono stati consegnati in tempo o meno. 
+-- controllato con un WHERE nella SELECT esterna: delivered=96478, delivered con 
+-- entrambe le date = 96470; puntuali = 88644, in ritardo = 7826
+WITH order_delivered_timestamp AS (
+	SELECT 
+		order_id,
+		CASE 
+			WHEN order_delivered_customer_date <= order_estimated_delivery_date THEN 'puntuale'
+			ELSE 'non puntuale'
+		END AS consegna_ordine
+	FROM orders 
+	WHERE 
+		order_status = 'delivered' 
+		AND order_delivered_customer_date IS NOT NULL
+		AND order_estimated_delivery_date IS NOT NULL
+),
+order_id_grouped_avg AS (
+	SELECT order_id, COUNT(review_id) AS n_review_id, AVG(review_score) AS avg_review_score_per_order
+	FROM order_reviews 
+	GROUP BY order_id 
+),
+-- 646 ordini escono dalla JOIN perchè senza review
+order_review_id AS (
+	SELECT odt.order_id, odt.consegna_ordine, oiga.n_review_id, oiga.avg_review_score_per_order 
+	FROM order_delivered_timestamp odt
+	JOIN order_id_grouped_avg oiga ON oiga.order_id = odt.order_id 
+)
+SELECT consegna_ordine, COUNT(*) AS n_orders, AVG(avg_review_score_per_order) AS avg_review_score
+FROM order_review_id
+GROUP BY consegna_ordine;
 
-
-
+/*
+----> 7. CONCLUSIONE Ordini consegnati in ritardo e punteggio delle recensioni
+il ritardo è dato dalla data di consegna al cliente successiva alla data stimata, nella query <= sarebbe un ordine puntuale. 
+analizzati 95.824 ordini delivered di cui esclusi 8 senza data di consegna e 646 senza recensione.
+Per gli ordini con più recensioni il punteggio è la media delle loro recensioni visto che in order_reviews la chiave è composta.
+gli ordini in ritardo sono 7.661, ovvero l'8,0%, con punteggio medio della review di 2,57 mentre i puntuali sono 88.163 ordini
+con punteggio medio di 4,29.
+la differenza è di 1,73 punti con i ritardi associati a recensioni molto più basse ma è un'associazione, non una prova che ne
+sia la causa.
+*/
 
 
 
