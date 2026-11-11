@@ -94,11 +94,12 @@ SELECT COUNT(*)
 FROM orders 
 WHERE order_id IS NULL;
 
+
 -- 2. verifico se customer_id è FK per la tabella customers
--- tutti i record della FK devono trovarsi nella PK in customers
-----> tutti i 99.441 record di o.customer_id si trovano in c.customer_id,
----- quindi o.customer_id è FK. Inoltre o.customer_id è unico (99.441 valori distinti su
----- 99.441 ordini, seconda query) e customers ha 99.441 righe: la corrispondenza è 1:1.
+-- tutti i record della FK devono trovarsi nella PK in customer
+----> tutti i record di o.customer_id si trovano in c.customer_id 
+---- quindi o.customer_id è FK. inoltre o.customer_id sappiamo essere unico e sapendo
+---- che customers ha 99441 righe allora la corrispondenza è 1:1. 
 
 SELECT COUNT(*)
 FROM orders o

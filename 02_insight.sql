@@ -163,7 +163,7 @@ SELECT
 	customer_state, 
 	AVG(order_delivered_customer_date-order_purchase_timestamp) AS avg_delivery_time,
 	ROUND(AVG(EXTRACT(epoch FROM order_delivered_customer_date-order_purchase_timestamp)) / (60*60*24), 2) AS avg_day, 
-	COUNT(*)
+	COUNT(*) AS orders_per_state
 FROM orders_delivered_state
 GROUP BY customer_state
 ORDER BY avg_day; 
